@@ -1,0 +1,74 @@
+<h1>第一个上传按钮</h1>
+<form id="upload_form" action="/upload" method="POST" enctype="multipart/form-data">
+    <input type="file" name="upload_file">
+    <button type="submit">上传</button>
+</form>
+<div id="downloadArea" style="margin-top: 20px;"></div>
+
+<div style="margin-top: 30px; border-top: 1px solid #ccc; padding-top: 10px;">
+    <h3>📦 仓库里已有的文件：</h3>
+    <ul id="fileList">
+    </ul>
+</div>
+
+</div>
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"> </script>
+
+<script>
+    $(document).ready(function(){
+        function loadFilesList(){
+            $.get('/files',function(filesarray){
+                $('#fileList').empty();
+                if(filesarray.length==0){
+                    $('#fileList').append('<li>仓库里没有文件</li>');
+                    return;
+                }
+                filesarray.forEach(function(filename){
+                    var listItem=`<li>
+                        <a href="/download/${filename}">下载文件${filename}</a>
+                        <button class="delete-btn" data-filename="${filename}" style="margin-left: 10px;">删除</button>
+                        </li>`;
+                    $('#fileList').append(listItem);
+                });
+            });
+        }
+        loadFilesList();
+        $('#fileList').on('click','.delete-btn',function(){
+            var filename=$(this).data('filename');
+            $.ajax({
+                url:'/delete/'+filename,
+                type:'POST',
+                success:function(){
+                    alert("文件" + filename + "删除成功");
+                    loadFilesList();
+                },
+                error:function(){
+                    alert("文件" + filename + "删除失败");  
+                }
+
+            })
+        })
+        $('#upload_form').submit(function(event){
+            event.preventDefault();
+            alert('上传按钮被点击并被成功拦截了！');
+
+            var package=new FormData(this);
+            $.ajax({
+                url:'/upload',
+                type:'POST',
+                data:package,
+                processData:false,
+                contentType:false,
+                success:function(response){
+                    alert("文件上传成功！");
+                    var downloadlink= `<a href="/download/${response.filename}">下载文件${response.filename}</a>`;
+                    $('#downloadArea').html(downloadlink);
+                    loadFilesList();
+                },
+                error:function(){
+                    alert("文件上传失败！");
+                }
+            })
+        });
+    });
+</script>
