@@ -1,13 +1,58 @@
-from flask import Flask, render_template, request,send_from_directory,jsonify
+from flask import Flask, render_template, request,send_from_directory,jsonify,session,redirect,url_for
 import os
+import json
 
 app=Flask(__name__)
+app.secret_key='key'
 
 if not os.path.exists('uploads'):
     os.makedirs('uploads')
+USER_FILE="user.json"
+def load_users():
+    if not os.path.exists(USER_FILE):
+        return {}
+    else:
+        with open(USER_FILE,'r') as f:
+            return json.load(f)
+def save_users(users):
+    with open(USER_FILE,'w') as f:
+        json.dump(users,f)
+
 @app.route('/')
 def index():
+    if 'username' not in session:
+        return redirect(url_for('register'))
     return render_template('index.html')
+@app.route('/register',methods=['GET','POST'])
+def register():
+    if request.method=="POST":
+        username=request.form['username']
+        password=request.form['password']
+        users=load_users()
+
+        if username in users:
+            return jsonify({'message':'用户名已存在'})
+        users[username]=password
+        save_users(users)
+        return redirect(url_for('login'))
+    else:
+        return render_template('register.html')
+
+
+
+@app.route('/login',methods=['GET','POST'])
+def login():
+    if request.method=='POST':
+        username=request.form['username']
+        password=request.form['password']
+        users=load_users()
+        if username in users and users[username]==password:
+            session['username']=username
+            return redirect(url_for('index'))
+        else:
+            return jsonify({'message':'用户名或密码错误'})
+    return render_template('login.html')
+
 
 @app.route('/upload',methods=['POST'])
 def receive_file():
