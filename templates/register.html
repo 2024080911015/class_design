@@ -1,5 +1,5 @@
 <h1>注册</h1>
-<form method="POST" action="/register">
+<form id="registerForm" method="POST" action="/register">
     <p>
         账号<input type="text" name="username">
     </p>
@@ -10,3 +10,27 @@
 </form>
 
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"> </script>
+<script>
+    $(document).ready(function(){
+        $('#registerForm').submit(function(event){
+            event.preventDefault();
+            alert('注册按钮被点击并被成功拦截了！');
+            var formdata=$(this).serialize();
+            $.ajax({
+                url:'/register',
+                type:'POST',
+                data:formdata,
+                success:function(response){
+                    alert(response.message);
+                    if(response.message=="注册成功"){
+                        window.location.href='/login';
+                    }
+                    else{
+                        alert("注册失败");
+                    }
+                },
+            })
+        })
+
+    })
+</script>

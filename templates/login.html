@@ -1,5 +1,5 @@
 <h2>内部仓库，闲人免进</h2>
-<form method="POST" action="/login">
+<form id="loginForm" method="POST" action="/login">
     <p>
        账号 <input type="text" name="username">
     </p>
@@ -8,4 +8,28 @@
     </p>
     <button type="submit">登录</button>
 </form>
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"> </script>
+<script>
+   $(document).ready(function(){
+         $('#loginForm').submit(function(event){
+               event.preventDefault();
+               alert('登录按钮被点击并被成功拦截了！');
+               var formdata=$(this).serialize();
+               $.ajax({
+                  url:'/login',
+                  type:'POST',
+                  data:formdata,
+                  success:function(response){
+                     alert(response.message);
+                     if(response.message=="登录成功"){
+                           window.location.href='/';
+                     }
+                     else{
+                           alert("登录失败");
+                     }
+                  },
+               })
+         })
+   })
+</script>
 

@@ -34,7 +34,7 @@ def register():
             return jsonify({'message':'用户名已存在'})
         users[username]=password
         save_users(users)
-        return redirect(url_for('login'))
+        return jsonify({'message':'注册成功'})
     else:
         return render_template('register.html')
 
@@ -48,7 +48,9 @@ def login():
         users=load_users()
         if username in users and users[username]==password:
             session['username']=username
-            return redirect(url_for('index'))
+            return jsonify({
+                "message":"登录成功",
+            })
         else:
             return jsonify({'message':'用户名或密码错误'})
     return render_template('login.html')
