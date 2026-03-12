@@ -4,7 +4,12 @@
     <button type="submit">上传</button>
 </form>
 <div id="downloadArea" style="margin-top: 20px;"></div>
+<h2>第二个上传按钮</h2>
+<form id="upload_folder_form" action="/upload_folder" method="POST" enctype="multipart/form-data">
+    <input type="file" name="upload_folder" webkitdirectory directory multiple>
+    <button type="submit">上传文件夹</button>
 
+</form>
 <div style="margin-top: 30px; border-top: 1px solid #ccc; padding-top: 10px;">
     <h3>📦 仓库里已有的文件：</h3>
     <ul id="fileList">
@@ -70,5 +75,25 @@
                 }
             })
         });
+        $('#upload_folder_form').submit(function(event){
+            event.preventDefault();
+            alert('上传文件夹按钮被点击并被成功拦截了！');
+            var package=new FormData(this);
+            $.ajax({
+                url:'/upload_folder',
+                type:'POST',
+                data:package,
+                processData:false,
+                contentType:false,
+                success:function(response){
+                    alert("文件夹上传成功！");
+                    loadFilesList();
+                },
+                error:function(){
+                    alert("文件夹上传失败！");
+                }
+            });
+        });
+
     });
 </script>

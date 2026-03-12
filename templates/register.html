@@ -8,7 +8,7 @@
     </p>
     <button type="submit">注册</button>
 </form>
-
+<button id="login">登录</button>
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"> </script>
 <script>
     $(document).ready(function(){
@@ -31,6 +31,8 @@
                 },
             })
         })
-
+        $('#login').click(function(){
+            window.location.href='/login';
+        })
     })
 </script>

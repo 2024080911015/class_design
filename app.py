@@ -94,5 +94,16 @@ def delete_file(filename):
                 'filename':filename
             }
         )
+    
+@app.route('/upload_folder',methods=['POST'])
+def upload_folder():
+    file_list=request.files.getlist('upload_folder')
+    for file in file_list:
+        file_path=os.path.join('uploads',file.filename)
+        dictionary=os.path.dirname(file_path)
+        if not os.path.exists(dictionary):
+            os.makedirs(dictionary)
+        file.save(file_path)
+    return jsonify({'message':'Folder uploaded successfully'})
 if __name__ == '__main__':
     app.run(host='0.0.0.0',port=5000)
