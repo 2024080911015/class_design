@@ -1,6 +1,10 @@
 from flask import Flask, render_template, request,send_from_directory,jsonify,session,redirect,url_for
 import os
 import json
+import os
+import io
+import zipfile
+from flask import send_file
 
 app=Flask(__name__)
 app.secret_key='key'
@@ -23,6 +27,7 @@ def index():
     if 'username' not in session:
         return redirect(url_for('register'))
     return render_template('index.html')
+
 @app.route('/register',methods=['GET','POST'])
 def register():
     if request.method=="POST":
@@ -66,15 +71,48 @@ def receive_file():
             'filename':file.filename
         }
     )
-@app.route('/download/<filename>')
-def download_file(filename):
-    return send_from_directory('uploads',filename,as_attachment=True)
+
+@app.route('/download/<path:file_path>')
+def download_file(file_path):
+    full_path=os.path.join('uploads',file_path)
+    if os.path.isdir(full_path):
+        return send_from_directory_zip(full_path,file_path)
+    else:
+        return send_from_directory('uploads', file_path, as_attachment=True)
+def send_from_directory_zip(directory, filename):
+    zip_filename=f'{filename}.zip'
+    zip_buffer=io.BytesIO()
+    with zipfile.ZipFile(zip_buffer,'w',zipfile.ZIP_DEFLATED) as zip_file:
+        for root,dirs,files in os.walk(directory):
+            for file in files:
+                file_path=os.path.join(root,file)
+                arcname=os.path.relpath(file_path, os.path.dirname(directory))
+                zip_file.write(file_path,arcname=arcname)
+    zip_buffer.seek(0)
+    return send_file(zip_buffer, mimetype='application/zip', as_attachment=True, download_name=zip_filename)
 
 
 @app.route('/files')
 def list_files():
-    files=os.listdir('uploads')
-    return jsonify(files)
+    return jsonify(get_dictory_structure('uploads'))
+def get_dictory_structure(root_dir):
+    structure=[]
+    for item in os.listdir(root_dir):
+        item_path=os.path.join(root_dir,item)
+        if os.path.isdir(item_path):
+            structure.append({
+                'name':item,
+                'type':'folder',
+                'path':item_path,
+                'children':get_dictory_structure(item_path)
+            })
+        else:
+            structure.append({
+                'name':item,
+                'type':'file',
+                'path':item_path    
+            })
+    return structure
 
 @app.route('/delete/<filename>',methods=['POST'])
 def delete_file(filename):
