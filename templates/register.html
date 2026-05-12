@@ -1,38 +1,33 @@
-<h1>注册</h1>
-<form id="registerForm" method="POST" action="/register">
-    <p>
-        账号<input type="text" name="username">
-    </p>
-    <p>
-        密码<input type="password" name="password">
-    </p>
-    <button type="submit">注册</button>
-</form>
-<button id="login">登录</button>
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"> </script>
-<script>
-    $(document).ready(function(){
-        $('#registerForm').submit(function(event){
-            event.preventDefault();
-            alert('注册按钮被点击并被成功拦截了！');
-            var formdata=$(this).serialize();
-            $.ajax({
-                url:'/register',
-                type:'POST',
-                data:formdata,
-                success:function(response){
-                    alert(response.message);
-                    if(response.message=="注册成功"){
-                        window.location.href='/login';
-                    }
-                    else{
-                        alert("注册失败");
-                    }
-                },
-            })
-        })
-        $('#login').click(function(){
-            window.location.href='/login';
-        })
-    })
-</script>
+{% extends "base.html" %}
+
+{% block title %}注册{% endblock %}
+{% block body_class %}page-auth{% endblock %}
+
+{% block content %}
+<div class="auth-shell">
+    <section class="auth-panel">
+        <div class="auth-header">
+            <h1>注册</h1>
+            <p>内部文件仓库</p>
+        </div>
+        <form id="registerForm" class="auth-form" method="post" action="{{ url_for('register') }}">
+            <div class="field-group">
+                <label for="regUser">账号</label>
+                <input id="regUser" type="text" name="username" placeholder="请输入用户名" autocomplete="username" required>
+            </div>
+            <div class="field-group">
+                <label for="regPass">密码</label>
+                <input id="regPass" type="password" name="password" placeholder="请输入密码" autocomplete="new-password" required>
+            </div>
+            <button type="submit">注册</button>
+        </form>
+        <div class="auth-footer">
+            已有账号？<a href="{{ url_for('login') }}">去登录</a>
+        </div>
+    </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/auth.js') }}"></script>
+{% endblock %}

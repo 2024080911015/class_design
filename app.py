@@ -1,147 +1,212 @@
-from flask import Flask, render_template, request,send_from_directory,jsonify,session,redirect,url_for
-import os
+from flask import Flask, abort, jsonify, redirect, render_template, request, send_file, session, url_for
+import io
 import json
 import os
-import io
+import shutil
 import zipfile
-from flask import send_file
 
-app=Flask(__name__)
-app.secret_key='key'
 
-if not os.path.exists('uploads'):
-    os.makedirs('uploads')
-USER_FILE="user.json"
+app = Flask(__name__)
+app.secret_key = "key"
+app.config["TEMPLATES_AUTO_RELOAD"] = True
+
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+UPLOAD_FOLDER = os.path.join(BASE_DIR, "uploads")
+USER_FILE = os.path.join(BASE_DIR, "user.json")
+
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+
 def load_users():
     if not os.path.exists(USER_FILE):
         return {}
-    else:
-        with open(USER_FILE,'r') as f:
-            return json.load(f)
+    with open(USER_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
 def save_users(users):
-    with open(USER_FILE,'w') as f:
-        json.dump(users,f)
-
-@app.route('/')
-def index():
-    if 'username' not in session:
-        return redirect(url_for('register'))
-    return render_template('index.html')
-
-@app.route('/register',methods=['GET','POST'])
-def register():
-    if request.method=="POST":
-        username=request.form['username']
-        password=request.form['password']
-        users=load_users()
-
-        if username in users:
-            return jsonify({'message':'用户名已存在'})
-        users[username]=password
-        save_users(users)
-        return jsonify({'message':'注册成功'})
-    else:
-        return render_template('register.html')
+    with open(USER_FILE, "w", encoding="utf-8") as f:
+        json.dump(users, f, ensure_ascii=False, indent=2)
 
 
-
-@app.route('/login',methods=['GET','POST'])
-def login():
-    if request.method=='POST':
-        username=request.form['username']
-        password=request.form['password']
-        users=load_users()
-        if username in users and users[username]==password:
-            session['username']=username
-            return jsonify({
-                "message":"登录成功",
-            })
-        else:
-            return jsonify({'message':'用户名或密码错误'})
-    return render_template('login.html')
+def normalize_upload_path(relative_path):
+    relative_path = (relative_path or "").replace("\\", "/").strip("/")
+    parts = [part for part in relative_path.split("/") if part and part != "."]
+    if not parts or any(part == ".." for part in parts):
+        abort(400, "无效的文件路径")
+    return "/".join(parts)
 
 
-@app.route('/upload',methods=['POST'])
-def receive_file():
-    file=request.files['upload_file']
-    file.save(os.path.join('uploads',file.filename))
-    return jsonify(
-        {
-            'message':'File uploaded successfully',
-            'filename':file.filename
-        }
-    )
-
-@app.route('/download/<path:file_path>')
-def download_file(file_path):
-    full_path=os.path.join('uploads',file_path)
-    if os.path.isdir(full_path):
-        return send_from_directory_zip(full_path,file_path)
-    else:
-        return send_from_directory('uploads', file_path, as_attachment=True)
-def send_from_directory_zip(directory, filename):
-    zip_filename=f'{filename}.zip'
-    zip_buffer=io.BytesIO()
-    with zipfile.ZipFile(zip_buffer,'w',zipfile.ZIP_DEFLATED) as zip_file:
-        for root,dirs,files in os.walk(directory):
-            for file in files:
-                file_path=os.path.join(root,file)
-                arcname=os.path.relpath(file_path, os.path.dirname(directory))
-                zip_file.write(file_path,arcname=arcname)
-    zip_buffer.seek(0)
-    return send_file(zip_buffer, mimetype='application/zip', as_attachment=True, download_name=zip_filename)
+def safe_upload_path(relative_path):
+    clean_path = normalize_upload_path(relative_path)
+    full_path = os.path.abspath(os.path.join(UPLOAD_FOLDER, *clean_path.split("/")))
+    if os.path.commonpath([UPLOAD_FOLDER, full_path]) != UPLOAD_FOLDER:
+        abort(400, "无效的文件路径")
+    return clean_path, full_path
 
 
-@app.route('/files')
-def list_files():
-    return jsonify(get_dictory_structure('uploads'))
-def get_dictory_structure(root_dir):
-    structure=[]
-    for item in os.listdir(root_dir):
-        item_path=os.path.join(root_dir,item)
+def get_directory_structure(root_dir, base_dir=UPLOAD_FOLDER):
+    structure = []
+    if not os.path.exists(root_dir):
+        return structure
+
+    for item in sorted(os.listdir(root_dir), key=lambda name: name.lower()):
+        item_path = os.path.join(root_dir, item)
+        relative_path = os.path.relpath(item_path, base_dir).replace("\\", "/")
+        stat = os.stat(item_path)
         if os.path.isdir(item_path):
-            structure.append({
-                'name':item,
-                'type':'folder',
-                'path':item_path,
-                'children':get_dictory_structure(item_path)
-            })
+            structure.append(
+                {
+                    "name": item,
+                    "type": "folder",
+                    "path": relative_path,
+                    "modified": stat.st_mtime,
+                    "children": get_directory_structure(item_path, base_dir),
+                }
+            )
         else:
-            structure.append({
-                'name':item,
-                'type':'file',
-                'path':item_path    
-            })
+            structure.append(
+                {
+                    "name": item,
+                    "type": "file",
+                    "path": relative_path,
+                    "size": stat.st_size,
+                    "modified": stat.st_mtime,
+                }
+            )
     return structure
 
-@app.route('/delete/<filename>',methods=['POST'])
-def delete_file(filename):
-    file_path=os.path.join('uploads',filename)
-    if os.path.exists(file_path):
-        os.remove(file_path)
-        return jsonify(
-            {
-                'message':'File deleted successfully',
-                'filename':filename
-            }
-        )
-    else:
-        return jsonify(
-            {
-                'message':'File not found',
-                'filename':filename
-            }
-        )
-    
-@app.route('/upload_folder',methods=['POST'])
+
+def send_directory_zip(directory, relative_path):
+    zip_filename = f"{os.path.basename(directory)}.zip"
+    zip_buffer = io.BytesIO()
+    parent_dir = os.path.dirname(directory)
+
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+        for root, _, files in os.walk(directory):
+            for filename in files:
+                file_path = os.path.join(root, filename)
+                arcname = os.path.relpath(file_path, parent_dir)
+                zip_file.write(file_path, arcname=arcname)
+
+    zip_buffer.seek(0)
+    return send_file(
+        zip_buffer,
+        mimetype="application/zip",
+        as_attachment=True,
+        download_name=zip_filename or f"{relative_path}.zip",
+    )
+
+
+@app.route("/")
+def index():
+    if "username" not in session:
+        return redirect(url_for("register"))
+    return render_template("index.html", username=session["username"])
+
+
+@app.route("/register", methods=["GET", "POST"])
+def register():
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+        if not username or not password:
+            return jsonify({"message": "账号和密码不能为空"}), 400
+
+        users = load_users()
+        if username in users:
+            return jsonify({"message": "用户名已存在"}), 409
+
+        users[username] = password
+        save_users(users)
+        return jsonify({"message": "注册成功"})
+
+    return render_template("register.html")
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+        users = load_users()
+        if users.get(username) == password:
+            session["username"] = username
+            return jsonify({"message": "登录成功"})
+        return jsonify({"message": "用户名或密码错误"}), 401
+
+    return render_template("login.html")
+
+
+@app.route("/logout")
+def logout():
+    session.pop("username", None)
+    return redirect(url_for("login"))
+
+
+@app.route("/upload", methods=["POST"])
+def receive_file():
+    file = request.files.get("upload_file")
+    if not file or not file.filename:
+        return jsonify({"message": "请选择要上传的文件"}), 400
+
+    clean_path, file_path = safe_upload_path(os.path.basename(file.filename))
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    file.save(file_path)
+    return jsonify({"message": "文件上传成功", "filename": clean_path, "path": clean_path})
+
+
+@app.route("/upload_folder", methods=["POST"])
 def upload_folder():
-    file_list=request.files.getlist('upload_folder')
+    file_list = request.files.getlist("upload_folder")
+    saved_files = []
+
     for file in file_list:
-        file_path=os.path.join('uploads',file.filename)
-        dictionary=os.path.dirname(file_path)
-        if not os.path.exists(dictionary):
-            os.makedirs(dictionary)
+        if not file or not file.filename:
+            continue
+        clean_path, file_path = safe_upload_path(file.filename)
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
         file.save(file_path)
-    return jsonify({'message':'Folder uploaded successfully'})
-if __name__ == '__main__':
-    app.run(host='0.0.0.0',port=5000)
+        saved_files.append(clean_path)
+
+    if not saved_files:
+        return jsonify({"message": "请选择要上传的文件夹"}), 400
+
+    return jsonify({"message": "文件夹上传成功", "count": len(saved_files), "files": saved_files})
+
+
+@app.route("/download/<path:file_path>")
+def download_file(file_path):
+    clean_path, full_path = safe_upload_path(file_path)
+    if not os.path.exists(full_path):
+        abort(404)
+
+    if os.path.isdir(full_path):
+        return send_directory_zip(full_path, clean_path)
+
+    return send_file(full_path, as_attachment=True, download_name=os.path.basename(full_path))
+
+
+@app.route("/files")
+def list_files():
+    return jsonify(get_directory_structure(UPLOAD_FOLDER))
+
+
+@app.route("/delete/<path:file_path>", methods=["POST"])
+def delete_file(file_path):
+    clean_path, target_path = safe_upload_path(file_path)
+    if not os.path.exists(target_path):
+        return jsonify({"message": "文件不存在", "path": clean_path}), 404
+
+    if os.path.isdir(target_path):
+        shutil.rmtree(target_path)
+        message = "文件夹删除成功"
+    else:
+        os.remove(target_path)
+        message = "文件删除成功"
+
+    return jsonify({"message": message, "path": clean_path})
+
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000, debug=False)

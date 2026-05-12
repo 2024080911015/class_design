@@ -1,99 +1,96 @@
-<h1>第一个上传按钮</h1>
-<form id="upload_form" action="/upload" method="POST" enctype="multipart/form-data">
-    <input type="file" name="upload_file">
-    <button type="submit">上传</button>
-</form>
-<div id="downloadArea" style="margin-top: 20px;"></div>
-<h2>第二个上传按钮</h2>
-<form id="upload_folder_form" action="/upload_folder" method="POST" enctype="multipart/form-data">
-    <input type="file" name="upload_folder" webkitdirectory directory multiple>
-    <button type="submit">上传文件夹</button>
+{% extends "base.html" %}
 
-</form>
-<div style="margin-top: 30px; border-top: 1px solid #ccc; padding-top: 10px;">
-    <h3>📦 仓库里已有的文件：</h3>
-    <ul id="fileList">
-    </ul>
+{% block title %}文件管理{% endblock %}
+{% block body_class %}page-dashboard{% endblock %}
+
+{% block content %}
+<!-- Top Bar -->
+<header class="topbar">
+    <div class="topbar-left">
+        <span class="topbar-title">文件管理</span>
+    </div>
+    <div class="topbar-right">
+        <span class="current-user">{{ username }}</span>
+        <a class="logout-link" href="{{ url_for('logout') }}">退出</a>
+    </div>
+</header>
+
+<!-- Main Workspace: 两个部分 -->
+<div class="workspace">
+
+    <!-- ========== 第一部分：文件上传 ========== -->
+    <section class="panel panel-upload">
+        <div class="panel-header">
+            <h2>上传文件</h2>
+            <div id="uploadProgress" class="upload-progress" style="display:none;"></div>
+        </div>
+
+        <div id="uploadTabs">
+            <ul>
+                <li><a href="#tabSingle">单个文件</a></li>
+                <li><a href="#tabFolder">整个文件夹</a></li>
+            </ul>
+
+            <!-- 单文件上传 -->
+            <div id="tabSingle">
+                <form id="uploadForm" class="upload-form" method="post" enctype="multipart/form-data">
+                    <div class="upload-dropzone">
+                        <span class="dropzone-icon">+</span>
+                        <span class="dropzone-text">点击选择文件</span>
+                        <input id="singleFileInput" type="file" name="upload_file" required>
+                    </div>
+                    <p id="singleFileName" class="file-hint">尚未选择文件</p>
+                    <button id="singleUploadBtn" type="submit">上传文件</button>
+                </form>
+            </div>
+
+            <!-- 文件夹上传 -->
+            <div id="tabFolder">
+                <form id="uploadFolderForm" class="upload-form" method="post" enctype="multipart/form-data">
+                    <div class="upload-dropzone">
+                        <span class="dropzone-icon">+</span>
+                        <span class="dropzone-text">点击选择文件夹</span>
+                        <input id="folderInput" type="file" name="upload_folder" webkitdirectory directory multiple required>
+                    </div>
+                    <p id="folderFileName" class="file-hint">尚未选择文件夹</p>
+                    <button id="folderUploadBtn" type="submit">上传文件夹</button>
+                </form>
+            </div>
+        </div>
+    </section>
+
+    <!-- ========== 第二部分：文件管理（下载 + 删除） ========== -->
+    <section class="panel panel-files">
+        <div class="panel-header">
+            <h2>文件列表</h2>
+            <div class="panel-header-actions">
+                <button id="refreshFiles">刷新</button>
+                <span class="file-count" id="fileCount"></span>
+            </div>
+        </div>
+
+        <div class="file-table-header">
+            <span class="fc-name">名称</span>
+            <span class="fc-size">大小</span>
+            <span class="fc-date">修改时间</span>
+            <span class="fc-actions">操作</span>
+        </div>
+        <div id="fileList" class="file-list-body" aria-live="polite"></div>
+    </section>
+
 </div>
 
+<!-- ========== jQuery UI Dialog：消息提示 ========== -->
+<div id="msgDialog" title="提示" style="display:none;">
+    <p id="msgText"></p>
 </div>
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"> </script>
 
-<script>
-    $(document).ready(function(){
-        function loadFilesList(){
-            $.get('/files',function(filesarray){
-                $('#fileList').empty();
-                if(filesarray.length==0){
-                    $('#fileList').append('<li>仓库里没有文件</li>');
-                    return;
-                }
-                filesarray.forEach(function(filename){
-                    var listItem=`<li>
-                        <a href="/download/${filename}">下载文件${filename}</a>
-                        <button class="delete-btn" data-filename="${filename}" style="margin-left: 10px;">删除</button>
-                        </li>`;
-                    $('#fileList').append(listItem);
-                });
-            });
-        }
-        loadFilesList();
-        $('#fileList').on('click','.delete-btn',function(){
-            var filename=$(this).data('filename');
-            $.ajax({
-                url:'/delete/'+filename,
-                type:'POST',
-                success:function(){
-                    alert("文件" + filename + "删除成功");
-                    loadFilesList();
-                },
-                error:function(){
-                    alert("文件" + filename + "删除失败");  
-                }
+<!-- ========== jQuery UI Dialog：确认删除 ========== -->
+<div id="deleteDialog" title="确认删除" style="display:none;">
+    <p id="deleteTargetText"></p>
+</div>
+{% endblock %}
 
-            })
-        })
-        $('#upload_form').submit(function(event){
-            event.preventDefault();
-            alert('上传按钮被点击并被成功拦截了！');
-
-            var package=new FormData(this);
-            $.ajax({
-                url:'/upload',
-                type:'POST',
-                data:package,
-                processData:false,
-                contentType:false,
-                success:function(response){
-                    alert("文件上传成功！");
-                    var downloadlink= `<a href="/download/${response.filename}">下载文件${response.filename}</a>`;
-                    $('#downloadArea').html(downloadlink);
-                    loadFilesList();
-                },
-                error:function(){
-                    alert("文件上传失败！");
-                }
-            })
-        });
-        $('#upload_folder_form').submit(function(event){
-            event.preventDefault();
-            alert('上传文件夹按钮被点击并被成功拦截了！');
-            var package=new FormData(this);
-            $.ajax({
-                url:'/upload_folder',
-                type:'POST',
-                data:package,
-                processData:false,
-                contentType:false,
-                success:function(response){
-                    alert("文件夹上传成功！");
-                    loadFilesList();
-                },
-                error:function(){
-                    alert("文件夹上传失败！");
-                }
-            });
-        });
-
-    });
-</script>
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/files.js') }}"></script>
+{% endblock %}
